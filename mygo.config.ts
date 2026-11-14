@@ -4,7 +4,7 @@ export default defineConfig({
   name: "U Store",
   slug: "universal-store",
   identifier: "com.universalstore.app",
-  version: "0.2.0",
+  version: "0.3.0",
   license: "MIT",
   copyright: "© U Store contributors",
   linux: { comment: "A universal software store that works across every Linux distribution.", categories: ["PackageManager", "System"] },
