@@ -83,6 +83,7 @@ type SystemInfo struct {
 	FlathubEnabled  bool          `json:"flathubEnabled"`
 	NativeBackendID string        `json:"nativeBackendId"` // "" when none was detected
 	Theme           string        `json:"theme"`           // dark | light | system
+	Atomic          bool          `json:"atomic"`           // rpm-ostree (Silverblue, Bluefin, …)
 }
 
 // InstalledSource says which backend an installed app came from.

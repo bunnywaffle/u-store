@@ -86,6 +86,30 @@ go test ./...        # backend unit tests
 go tool mygo doctor  # check the machine has what MyGo needs
 ```
 
+## Notes: verified and portable
+
+Backends are chosen at startup from `/etc/os-release` (ID + ID_LIKE chain) — nothing is
+hardcoded to one distro. Verified in containers and natively:
+
+| Distro | Family | Detected | Searched repos | Install plan |
+| --- | --- | --- | --- | --- |
+| Fedora 44 (native) | dnf | ✓ | ✓ | ✓ |
+| Debian 12 | apt | ✓ | ✓ | ✓ |
+| Arch Linux | pacman | ✓ | ✓ | ✓ |
+| openSUSE Tumbleweed | zypper | ✓ | ✓ | ✓ |
+| Alpine Linux | apk | ✓ | ✓ | ✓ |
+
+Flatpak covers everything else (Gentoo, NixOS, Void…), and OSTree/atomic systems
+(Silverblue, Bluefin) are detected and answered with Flatpak instead of rpm.
+
+To diagnose a distro interactively (fails loudly on what doesn't work):
+
+```sh
+go test -c -o storeprobe.test ./internal/store
+STORE_PROBE=1 ./storeprobe.test -test.run TestContainerProbe -test.v
+# optionally: PROBE_QUERY=kdeconnect
+```
+
 Notes:
 
 - `go.mod` pins the MyGo CLI as a Go tool; `mygo` itself runs via `npx`/`go run`.

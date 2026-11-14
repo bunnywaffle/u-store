@@ -70,6 +70,7 @@ func (s *Store) Info() SystemInfo {
 		FlathubEnabled:  enabled,
 		NativeBackendID: nativeID,
 		Theme:           s.theme,
+		Atomic:          s.distro.Atomic,
 	}
 }
 

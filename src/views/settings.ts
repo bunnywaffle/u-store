@@ -32,7 +32,8 @@ export async function renderSettings(root: HTMLElement) {
         <dl class="kv">
           <dt>Distribution</dt><dd>${esc(info.prettyName)} <span style="color:var(--faint);font-family:var(--mono);font-size:.8em">(${esc(info.distroId)})</span></dd>
           <dt>Architecture</dt><dd>${esc(info.arch)}</dd>
-          <dt>Preferred source</dt><dd id="pref-source-label">${prefer && nativeName ? `${esc(nativeName)} (native) first` : "Flatpak first"}</dd>
+          <dt>Base system</dt><dd>${info.atomic ? 'Atomic (rpm-ostree) — Flatpak is your reliable source' : 'Standard (read-write)'}</dd>
+          <dt>Preferred source</dt><dd id="pref-source-label">${prefer && nativeName && !info.atomic ? `${esc(nativeName)} (native) first` : "Flatpak first"}</dd>
         </dl>
       </section>
 
@@ -86,7 +87,7 @@ export async function renderSettings(root: HTMLElement) {
             <label class="pref-name" for="prefer-native">Prefer native packages</label>
             <span class="pref-desc">When an app exists in your distro's repositories${nativeName ? ` (${esc(nativeName)})` : ""}, install that build instead of the Flatpak. Smaller disks, deeper desktop integration.</span>
           </div>
-          <label class="switch"><input type="checkbox" id="prefer-native" ${prefer ? "checked" : ""} ${nativeName ? "" : "disabled title=\"No native package manager detected\""} /><span class="track"></span><span class="thumb"></span></label>
+          <label class="switch"><input type="checkbox" id="prefer-native" ${prefer ? "checked" : ""} ${nativeName && !info.atomic ? "" : "disabled title=\"" + (info.atomic ? "This is an atomic system — Flatpak is the reliable source" : "No native package manager detected") + "\""} /><span class="track"></span><span class="thumb"></span></label>
         </div>
       </section>
 

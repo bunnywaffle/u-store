@@ -278,6 +278,7 @@ func (s *Store) SearchLocal(ctx context.Context, query string) LocalSearchResult
 	if query == "" {
 		return result
 	}
+	var out []LocalHit
 	for _, src := range s.registry.sources {
 		ls, ok := src.(localSearcher)
 		if !ok {
@@ -288,7 +289,15 @@ func (s *Store) SearchLocal(ctx context.Context, query string) LocalSearchResult
 			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", src.info().Name, err))
 			continue
 		}
-		result.Hits = append(result.Hits, hits...)
+		out = append(out, hits...)
+	}
+	seen := map[string]bool{}
+	for _, h := range out {
+		if seen[h.Backend+"/"+h.Name] {
+			continue
+		}
+		seen[h.Backend+"/"+h.Name] = true
+		result.Hits = append(result.Hits, h)
 	}
 	if len(result.Hits) > maxLocalHits {
 		result.Hits = result.Hits[:maxLocalHits]

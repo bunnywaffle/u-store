@@ -191,6 +191,8 @@ export interface SystemInfo {
   nativeBackendId: string;
   /** dark | light | system */
   theme: string;
+  /** rpm-ostree (Silverblue, Bluefin, …) */
+  atomic: boolean;
 }
 
 /** UpdateInfo is one pending update. */

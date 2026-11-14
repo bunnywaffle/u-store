@@ -146,6 +146,10 @@ func (s *Store) planLocalInstall(p *LocalPackage) {
 		}
 		p.Reason = "This is a Debian-family package, but this system uses " + familyLabel(family) + ". Install the same app as a Flatpak, or ask the vendor for an " + familyLabel(family) + " package."
 	case "rpm":
+		if s.distro.Atomic {
+			p.Reason = "This system is atomic (rpm-ostree): installing layered RPMs from the store needs a reboot and is out of scope. Use Flatpak, or run `rpm-ostree install <package>` in a terminal yourself."
+			return
+		}
 		switch family {
 		case "dnf":
 			p.argv = elevate([]string{"dnf", "install", "-y", p.Path})

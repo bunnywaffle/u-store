@@ -19,11 +19,18 @@ type Distro struct {
 	Pretty    string
 	Arch      string
 	Family    string // apt | dnf | pacman | zypper | apk | ""
+	Atomic    bool   // rpm-ostree / OSTree (Silverblue, Bluefin, …)
 }
+
+// ostreeBooted is overridable for tests.
+var ostreeBooted = "/run/ostree-booted"
 
 // DetectDistro parses os-release and maps it to a package manager family.
 func DetectDistro() Distro {
 	d := Distro{Arch: runtime.GOARCH, Family: ""}
+	if _, err := os.Stat(ostreeBooted); err == nil {
+		d.Atomic = true
+	}
 	fields := map[string]string{}
 	if f, err := os.Open(etcOSRelease); err == nil {
 		defer f.Close()
