@@ -7,7 +7,7 @@ import { Store, type AppSummary, type InstallEvent } from "./mygo";
 export { Store };
 export type {
   AppDetails, AppSummary, BackendInfo, Category, DiscoverResult,
-  InstalledApp, InstalledSource, InstallEvent, LocalPackage, SearchResult, SystemInfo, UpdateInfo,
+  InstalledApp, InstalledSource, InstallEvent, LocalPackage, LocalHit, SearchResult, SystemInfo, UpdateInfo,
 } from "./mygo";
 
 export const isMyGo = typeof window !== "undefined" && "mygo" in window;

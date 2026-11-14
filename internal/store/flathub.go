@@ -124,6 +124,13 @@ type flathubAppstream struct {
 	Releases []struct {
 		Timestamp string `json:"timestamp"`
 	} `json:"releases"`
+	Screenshots []struct {
+		Sizes []struct {
+			Src    string `json:"src"`
+			Width  string `json:"width"`
+		} `json:"sizes"`
+		Caption string `json:"caption"`
+	} `json:"screenshots"`
 }
 
 // verifiedFromMetadata reads flathub::verification::verified, which Flathub
@@ -193,4 +200,37 @@ func iconOrDefault(icon, appID string) string {
 		return icon
 	}
 	return iconFor(appID)
+}
+
+// screenshotsFromAppstream picks one good-resolution screenshot source per
+// entry, capped at count, skipping entries with nothing usable.
+func screenshotsFromAppstream(as *flathubAppstream, count int) []string {
+	var out []string
+	for _, s := range as.Screenshots {
+		best := ""
+		bestWidth := 0
+		for _, sz := range s.Sizes {
+			var w int
+			fmt.Sscanf(sz.Width, "%d", &w)
+			if w > bestWidth || (best == "" && w > 0) {
+				if w >= 640 && w <= 1920 {
+					best = sz.Src
+					bestWidth = w
+				} else if best == "" {
+					best = sz.Src
+					bestWidth = w
+				}
+			}
+		}
+		if best == "" && len(s.Sizes) > 0 {
+			best = s.Sizes[0].Src
+		}
+		if best != "" {
+			out = append(out, best)
+		}
+		if len(out) >= count {
+			break
+		}
+	}
+	return out
 }

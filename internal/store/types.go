@@ -37,6 +37,7 @@ type AppDetails struct {
 	UpdatedAt      int64    `json:"updatedAt"` // unix seconds, 0 = unknown
 	InstallsLastMonth int64 `json:"installsLastMonth"`
 	Origin         string   `json:"origin"` // "flathub" | "catalog"
+	Screenshots    []string `json:"screenshots"` // up to 4 screenshot URLs, empty when none
 }
 
 // Category is one sidebar entry in the Browse view.

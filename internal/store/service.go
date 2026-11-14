@@ -320,6 +320,7 @@ func (s *Store) AppDetails(ctx context.Context, id string) (AppDetails, error) {
 			fmt.Sscanf(as.Releases[0].Timestamp, "%d", &ts)
 			details.UpdatedAt = ts
 		}
+		details.Screenshots = screenshotsFromAppstream(as, 4)
 	}
 	if app := s.catalog.Find(id); app != nil {
 		if details.Name == "" {
@@ -358,15 +359,9 @@ func resolveRef(s *Store, id, backend string) (string, error) {
 	case "flatpak", "":
 		return id, nil
 	case "snap":
-		if ref := s.nativeRef(id, "snap"); ref != "" {
-			return ref, nil
-		}
-		return "", fmt.Errorf("no snap package is known for %s", id)
+		return s.localInstallRef(id, "snap"), nil
 	default:
-		if ref := s.nativeRef(id, backend); ref != "" {
-			return ref, nil
-		}
-		return "", fmt.Errorf("no %s package is known for %s", backend, id)
+		return s.localInstallRef(id, backend), nil
 	}
 }
 

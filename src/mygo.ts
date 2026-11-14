@@ -30,6 +30,8 @@ export interface AppDetails {
   installsLastMonth: number;
   /** "flathub" | "catalog" */
   origin: string;
+  /** up to 4 screenshot URLs, empty when none */
+  screenshots: string[];
 }
 
 /** AppSummary is the card-shaped view of an app, used in grids and lists. */
@@ -118,6 +120,18 @@ export interface InstalledSource {
   ref: string;
   /** flatpak only: "user" | "system" */
   scope: string;
+}
+
+/**
+ * LocalHit is one package available in the machine's own repositories.
+ * The store searches these alongside Flathub so anything your distro ships
+ * is installable too — without a curated catalog entry.
+ */
+export interface LocalHit {
+  name: string;
+  summary: string;
+  backend: string;
+  installed: boolean;
 }
 
 /**
@@ -248,6 +262,13 @@ export const Store = {
   /** Search queries Flathub live, falling back to the embedded catalog offline. */
   search(query: string): Promise<SearchResult> {
     return call("Store.Search", query);
+  },
+  /**
+   * SearchLocal queries the machine's own repositories for packages matching
+   * the query. Results are capped; failures of one backend never sink the rest.
+   */
+  searchLocal(query: string): Promise<LocalHit[]> {
+    return call("Store.SearchLocal", query);
   },
   /** SetTheme persists and applies the mode. Bound to the frontend. */
   setTheme(mode: string): Promise<void> {

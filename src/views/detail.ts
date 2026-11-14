@@ -5,9 +5,41 @@ import { runInstall, runRemove } from "../actions";
 
 type Navigate = (route: string, param?: string) => void;
 
+function openLightbox(src: string, appName: string) {
+  const overlay = document.createElement("div");
+  overlay.className = "lightbox";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-label", `${appName} screenshot`);
+  overlay.innerHTML = `
+    <button class="lightbox-close" aria-label="Close screenshot">${icon("x")}</button>
+    <img src="${esc(src)}" alt="${esc(appName)} screenshot, enlarged" referrerpolicy="no-referrer" />`;
+  const close = () => {
+    document.removeEventListener("keydown", onKey, true);
+    overlay.remove();
+  };
+  const onKey = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      close();
+    }
+  };
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay || (event.target as HTMLElement).closest(".lightbox-close")) close();
+  });
+  document.addEventListener("keydown", onKey, true);
+  document.body.appendChild(overlay);
+  overlay.querySelector<HTMLButtonElement>(".lightbox-close")!.focus();
+}
+
 export async function renderDetail(root: HTMLElement, navigate: Navigate, onChanged: () => void, id: string, back?: () => void) {
   root.innerHTML = `<div class="view"><div class="detail-back" role="button" tabindex="0" id="back">${icon("arrowLeft")} Back</div><div class="skeleton" style="height:170px;border-radius:var(--radius-xl)"></div><div class="skeleton" style="height:120px;border-radius:var(--radius-lg);margin-top:18px"></div></div>`;
   root.querySelector("#back")!.addEventListener("click", () => (back ?? (() => navigate("discover")))());
+
+  // Screenshots: click to open a fullscreen-ish lightbox
+  root.querySelectorAll<HTMLButtonElement>(".screen").forEach((btn) =>
+    btn.addEventListener("click", () => openLightbox(btn.dataset.shot!, app.name))
+  );
 
   let app: AppDetails;
   try {
@@ -61,6 +93,10 @@ export async function renderDetail(root: HTMLElement, navigate: Navigate, onChan
       ${app.nativePackage && native ? `<div class="meta-item"><span class="meta-k">Native package</span><span class="meta-v" style="font-family:var(--mono);font-size:.8rem">${esc(app.nativePackage)}</span></div>` : ""}
       ${snap ? `<div class="meta-item"><span class="meta-k">Also on</span><span class="meta-v">Snap Store</span></div>` : ""}
     </div>
+
+    ${app.screenshots?.length ? `<div class="screens" aria-label="Screenshots">${app.screenshots
+        .map((src, i) => `<button class="screen" data-shot="${esc(src)}" aria-label="Screenshot ${i + 1} of ${esc(app.name)}"><img src="${esc(src)}" alt="${esc(app.name)} screenshot ${i + 1}" height="176" width="313" loading="lazy" decoding="async" referrerpolicy="no-referrer" /></button>`)
+        .join("")}</div>` : ""}
 
     ${app.description ? `<div class="desc">${sanitizeHTML(app.description)}</div>` : ""}
     ${app.homepage ? `<p style="margin:18px 4px 0"><a class="btn ghost sm" href="${esc(app.homepage)}" target="_blank" rel="noreferrer noopener">${icon("external")} Website</a> <a class="btn ghost sm" href="https://flathub.org/apps/${esc(app.id)}" target="_blank" rel="noreferrer noopener">${icon("external")} View on Flathub</a></p>` : `<p style="margin:18px 4px 0"><a class="btn ghost sm" href="https://flathub.org/apps/${esc(app.id)}" target="_blank" rel="noreferrer noopener">${icon("external")} View on Flathub</a></p>`}
