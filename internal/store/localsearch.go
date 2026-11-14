@@ -15,6 +15,7 @@ type LocalHit struct {
 	Summary   string `json:"summary"`
 	Backend   string `json:"backend"`
 	Installed bool   `json:"installed"`
+	Icon      string `json:"icon"` // us-icon:// URL, Flathub URL, or "" (letter tile)
 }
 
 // localSearcher is implemented by sources that can query the local repos.
@@ -269,6 +270,18 @@ type LocalSearchResult struct {
 	Errors []string   `json:"errors"`
 }
 
+// iconForLocalHit prefers the Flathub icon (catalog match), then the
+// desktop-app icon resolved from an installed package; "" when unknown.
+func (s *Store) iconForLocalHit(ctx context.Context, hit LocalHit) string {
+	if id := s.catalog.IDForNativeRef(hit.Backend, hit.Name); id != "" {
+		return iconFor(id)
+	}
+	if hit.Installed {
+		return "us-icon://localhost/" + hit.Name
+	}
+	return ""
+}
+
 // SearchLocal queries the machine's own repositories for packages matching
 // the query. Backend failures are reported inside the result, never thrown:
 // a slow or unreachable repo must not blank the ones that answered.
@@ -297,6 +310,7 @@ func (s *Store) SearchLocal(ctx context.Context, query string) LocalSearchResult
 			continue
 		}
 		seen[h.Backend+"/"+h.Name] = true
+		h.Icon = s.iconForLocalHit(ctx, h)
 		result.Hits = append(result.Hits, h)
 	}
 	if len(result.Hits) > maxLocalHits {

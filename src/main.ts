@@ -164,6 +164,9 @@ if (isMyGo) {
 }
 
 // ---------- Sidebar system card ----------
+// The updates badge is deliberately deferred — it's the heaviest call on boot
+// (dnf check-update) and must not compete with first paint.
+setTimeout(() => { void refreshUpdatesBadge(); }, 2500);
 
 async function paintSystemCard() {
   const distro = document.getElementById("sys-distro")!;
@@ -183,5 +186,4 @@ async function paintSystemCard() {
 // ---------- Boot ----------
 
 void paintSystemCard();
-void refreshUpdatesBadge();
 navigate("discover");

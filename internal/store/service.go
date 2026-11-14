@@ -11,7 +11,8 @@ import (
 	"github.com/egoist/mygo"
 )
 
-const installedCacheTTL = 20 * time.Second
+const installedCacheTTL = 2 * time.Minute
+const updatesCacheTTL = 5 * time.Minute
 
 // Store is the service bound to the frontend. Every exported method is
 // callable from the page; mygo generate turns them into typed TS functions.
@@ -25,6 +26,8 @@ type Store struct {
 	mu             sync.Mutex
 	installed      map[string]map[string]string // backend -> ref -> scope
 	installedAt    time.Time
+	updates        []UpdateInfo
+	updatesAt      time.Time
 }
 
 // New builds a Store, detecting the machine and loading the catalog.
@@ -105,6 +108,8 @@ func (s *Store) invalidateInstalled() {
 	s.mu.Lock()
 	s.installed = map[string]map[string]string{}
 	s.installedAt = time.Time{}
+	s.updates = nil
+	s.updatesAt = time.Time{}
 	s.mu.Unlock()
 }
 
@@ -202,6 +207,8 @@ func (s *Store) summary(app catalogApp, sets map[string]map[string]string) AppSu
 }
 
 // flathubSummary builds an AppSummary from a live Flathub hit.
+
+// flathubSummary builds an AppSummary from a live Flathub hit.
 func (s *Store) flathubSummary(hit flathubHit, sets map[string]map[string]string) AppSummary {
 	installed, _ := s.lookupInstalled(sets, hit.AppID)
 	id := hit.AppID
@@ -223,48 +230,48 @@ func (s *Store) flathubSummary(hit flathubHit, sets map[string]map[string]string
 		}
 	}
 	return AppSummary{
-		ID:            id,
-		Name:          name,
-		Summary:       hit.Summary,
-		Icon:          iconOrDefault(hit.Icon, id),
-		Categories:    cats,
-		Developer:     hit.DeveloperName,
-		Verified:      hit.VerificationVerified,
-		Source:        "flatpak",
-		Sources:       []string{"flatpak"},
-		NativePackage: nativePkg,
-		Installed:     installed,
+		ID:                id,
+		Name:              name,
+		Summary:           hit.Summary,
+		Icon:              iconOrDefault(hit.Icon, id),
+		Categories:        cats,
+		Developer:         hit.DeveloperName,
+		Verified:          hit.VerificationVerified,
+		Source:            "flatpak",
+		Sources:           []string{"flatpak"},
+		NativePackage:     nativePkg,
+		Installed:         installed,
+		InstallsLastMonth: hit.InstallsLastMonth,
 	}
 }
 
 // --- discovery & search ------------------------------------------------------
 
-// Discover returns the curated featured picks plus the live trending list.
-// When Flathub is unreachable the view still renders from the catalog.
+// Discover returns a live home: the catalog stays the offline safety net, but
+// online the homepage is whatever Flathub says people install right now.
+// When Flathub is unreachable it degrades to the embedded catalog.
 func (s *Store) Discover(ctx context.Context) (DiscoverResult, error) {
 	sets := s.installedSets(ctx)
-	featured := []AppSummary{}
-	for _, app := range s.catalog.Apps {
-		if app.Featured {
-			featured = append(featured, s.summary(app, sets))
-		}
-	}
 	trending := []AppSummary{}
 	fromFlathub := false
-	hits, _, err := s.flathub.Search(ctx, "", 1, 18)
+	hits, _, err := s.flathub.Search(ctx, "", 1, 24)
 	if err == nil {
 		fromFlathub = true
 		for _, hit := range hits {
 			trending = append(trending, s.flathubSummary(hit, sets))
 		}
 	} else {
-		// offline: featured fill the trending rail rather than an empty page
-		for _, app := range s.catalog.Apps {
-			if len(trending) >= 12 {
+		// offline: curated picks fill the rail rather than an empty page
+		for i, app := range s.catalog.Apps {
+			if i >= 24 {
 				break
 			}
 			trending = append(trending, s.summary(app, sets))
 		}
+	}
+	featured := trending
+	if len(trending) > 12 {
+		featured = trending[:12] // hero rail: top 12 by installs
 	}
 	return DiscoverResult{Trending: trending, Featured: featured, Categories: s.catalog.Categories, FromFlathub: fromFlathub}, nil
 }
@@ -501,8 +508,18 @@ func (s *Store) Installed(ctx context.Context) ([]InstalledApp, error) {
 	return out, nil
 }
 
-// Updates lists pending updates across every available backend.
+// Updates lists pending updates across every available backend. Results are
+// cached for a few minutes — a cold `dnf check-update` can take seconds, and
+// the answer doesn't change between keystrokes.
 func (s *Store) Updates(ctx context.Context) ([]UpdateInfo, error) {
+	s.mu.Lock()
+	if time.Since(s.updatesAt) < updatesCacheTTL && s.updates != nil {
+		cached := s.updates
+		s.mu.Unlock()
+		return cached, nil
+	}
+	s.mu.Unlock()
+
 	var out []UpdateInfo
 	for _, src := range s.registry.sources {
 		u, err := src.updates(ctx)
@@ -544,6 +561,10 @@ func (s *Store) Updates(ctx context.Context) ([]UpdateInfo, error) {
 		}
 		return out[i].Name < out[j].Name
 	})
+	s.mu.Lock()
+	s.updates = out
+	s.updatesAt = time.Now()
+	s.mu.Unlock()
 	return out, nil
 }
 

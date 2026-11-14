@@ -51,6 +51,7 @@ export interface AppSummary {
   nativePackage?: string;
   installed: boolean;
   featured?: boolean;
+  installsLastMonth?: number;
 }
 
 /** BackendInfo describes one install backend on this machine. */
@@ -109,6 +110,7 @@ export interface InstalledApp {
   nativePackage?: string;
   installed: boolean;
   featured?: boolean;
+  installsLastMonth?: number;
   sources: InstalledSource[];
 }
 
@@ -132,6 +134,8 @@ export interface LocalHit {
   summary: string;
   backend: string;
   installed: boolean;
+  /** us-icon:// URL, Flathub URL, or "" (letter tile) */
+  icon: string;
 }
 
 /**
@@ -219,8 +223,9 @@ export const Store = {
     return call("Store.AppDetails", id);
   },
   /**
-   * Discover returns the curated featured picks plus the live trending list.
-   * When Flathub is unreachable the view still renders from the catalog.
+   * Discover returns a live home: the catalog stays the offline safety net, but
+   * online the homepage is whatever Flathub says people install right now.
+   * When Flathub is unreachable it degrades to the embedded catalog.
    */
   discover(): Promise<DiscoverResult> {
     return call("Store.Discover");
@@ -290,7 +295,11 @@ export const Store = {
   updateAll(progress: Channel<InstallEvent>): Promise<void> {
     return call("Store.UpdateAll", progress);
   },
-  /** Updates lists pending updates across every available backend. */
+  /**
+   * Updates lists pending updates across every available backend. Results are
+   * cached for a few minutes — a cold `dnf check-update` can take seconds, and
+   * the answer doesn't change between keystrokes.
+   */
   updates(): Promise<UpdateInfo[]> {
     return call("Store.Updates");
   },

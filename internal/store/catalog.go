@@ -34,6 +34,7 @@ type Catalog struct {
 	Categories []Category
 	Apps       []catalogApp
 	byID       map[string]*catalogApp
+	byNative   map[string]map[string]string // backend -> package name -> flathub id
 }
 
 // LoadCatalog parses the embedded catalog. It only fails on a programmer
@@ -43,11 +44,17 @@ func LoadCatalog() (*Catalog, error) {
 	if err := json.Unmarshal(catalogData, &f); err != nil {
 		return nil, fmt.Errorf("catalog: %w", err)
 	}
-	c := &Catalog{Categories: f.Categories, byID: map[string]*catalogApp{}}
+	c := &Catalog{Categories: f.Categories, byID: map[string]*catalogApp{}, byNative: map[string]map[string]string{}}
 	for i := range f.Apps {
 		app := &f.Apps[i]
 		c.byID[app.ID] = app
 		c.Apps = append(c.Apps, *app)
+		for backend, ref := range app.Native {
+			if c.byNative[backend] == nil {
+				c.byNative[backend] = map[string]string{}
+			}
+			c.byNative[backend][ref] = app.ID
+		}
 	}
 	return c, nil
 }
@@ -63,6 +70,11 @@ func (c *Catalog) NativePackage(id, backend string) string {
 // Find returns the curated entry for a Flathub ID, or nil.
 func (c *Catalog) Find(id string) *catalogApp {
 	return c.byID[id]
+}
+
+// IDForNativeRef maps a native package name back to its catalog app, if any.
+func (c *Catalog) IDForNativeRef(backend, ref string) string {
+	return c.byNative[backend][ref]
 }
 
 // ForCategory lists curated apps of one category, featured first.

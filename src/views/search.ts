@@ -62,9 +62,12 @@ export async function renderSearch(root: HTMLElement, navigate: Navigate, onChan
 
 function localRow(hit: LocalHit): string {
   const letter = esc((hit.name.trim()[0] ?? "?").toUpperCase());
+  const iconHtml = hit.icon
+    ? `<img class="app-icon" src="${esc(hit.icon)}" alt="" width="56" height="56" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-fallback-id="${esc(hit.name)}" data-fallback-letter="${letter}" data-fallback-hue="#4d4d4d" />`
+    : `<span class="icon-tile" aria-hidden="true">${letter}</span>`;
   return `
   <div class="list-row">
-    <span class="icon-tile" aria-hidden="true">${letter}</span>
+    ${iconHtml}
     <div class="row-main">
       <span class="row-title">${esc(hit.name)}</span>
       <div class="row-sub">${hit.summary ? esc(hit.summary) : `${esc(backendName(hit.backend))} package`}</div>

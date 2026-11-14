@@ -26,6 +26,7 @@ type AppSummary struct {
 	NativePackage string   `json:"nativePackage,omitempty"` // native package name, when known
 	Installed     bool     `json:"installed"`
 	Featured      bool     `json:"featured,omitempty"`
+	InstallsLastMonth int64 `json:"installsLastMonth,omitempty"`
 }
 
 // AppDetails is the full page for one app.
