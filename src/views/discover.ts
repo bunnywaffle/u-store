@@ -1,5 +1,5 @@
-import { Store, isMyGo, formatInstalls, type DiscoverResult } from "../api";
-import { appCard, emptyState, esc, notice, skeletonGrid } from "../components";
+import { Store, isMyGo, formatInstalls, installFlatpak, type DiscoverResult, type SystemInfo } from "../api";
+import { appCard, emptyState, esc, notice, skeletonGrid, toast } from "../components";
 import { icon } from "../icons";
 import { wireCardActions } from "../actions";
 
@@ -9,12 +9,15 @@ export async function renderDiscover(root: HTMLElement, navigate: Navigate, onCh
   root.innerHTML = `<div class="view"><div class="view-head"><div><h1 class="view-title">Discover</h1><p class="view-sub">What Flathub says people install right now.</p></div></div>${skeletonGrid(10)}</div>`;
 
   let data: DiscoverResult | null = null;
+  let info: SystemInfo | null = null;
   try {
-    data = await Store.discover();
+    [data, info] = await Promise.all([Store.discover(), Store.info().catch(() => null)]);
   } catch (err) {
     root.innerHTML = `<div class="view">${notice(isMyGo ? "Couldn't reach the backend. Is the app fully up to date?" : "You're previewing this page in a browser — run inside the U Store app to install real apps.", "error")}${emptyState("wifiOff", "Nothing to show yet", "Check your network connection and try again.")}</div>`;
     return;
   }
+
+  const flatpakMissing = info ? !info.backends.some((b) => b.id === "flatpak" && b.available) : false;
 
   const live = data.fromFlathub;
   const trending = data.trending;
@@ -27,6 +30,11 @@ export async function renderDiscover(root: HTMLElement, navigate: Navigate, onCh
 
   root.innerHTML = `
   <div class="view">
+    ${flatpakMissing ? `
+    <div class="notice info" style="justify-content:space-between;gap:14px">
+      <span>Most apps here install through Flatpak — it isn't on this machine yet. One click and every app is available.</span>
+      <button class="btn sm" id="install-flatpak">${icon("download")} Install Flatpak</button>
+    </div>` : ""}
     ${!live ? notice("Flathub is unreachable — showing the built-in catalog. Connecting restores live trending.", "info") : ""}
     ${hero ? `
     <section class="hero">
@@ -53,6 +61,21 @@ export async function renderDiscover(root: HTMLElement, navigate: Navigate, onCh
     <h2 class="section-label"><span>Categories</span></h2>
     <div class="chip-row">${data.categories.map((c) => `<button class="chip" data-cat="${esc(c.id)}">${icon(c.icon)}${esc(c.name)}</button>`).join("")}</div>
   </div>`;
+
+  root.querySelector("#install-flatpak")?.addEventListener("click", async (ev) => {
+    const btn = ev.currentTarget as HTMLButtonElement;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner"></span> Installing…`;
+    const ok = await installFlatpak(() => {});
+    if (ok) {
+      toast("Flatpak installed — Flathub is ready.", "ok");
+      navigate("discover");
+    } else {
+      toast("Couldn't install Flatpak — see logs.", "error");
+      btn.disabled = false;
+      btn.innerHTML = `${icon("download")} Install Flatpak`;
+    }
+  });
 
   const heroGet = root.querySelector<HTMLButtonElement>("#hero-get");
   if (heroGet && hero?.installed) {

@@ -1,4 +1,4 @@
-import { Store, preferNative, setPreferNative, backendName, type SystemInfo } from "../api";
+import { Store, preferNative, setPreferNative, backendName, installFlatpak, type SystemInfo } from "../api";
 import { emptyState, esc, toast } from "../components";
 import { icon } from "../icons";
 
@@ -15,6 +15,7 @@ export async function renderSettings(root: HTMLElement) {
 
   const prefer = preferNative();
   const nativeName = info.nativeBackendId ? backendName(info.nativeBackendId) : null;
+  const backends = info.backends;
 
   root.innerHTML = `
   <div class="view">
@@ -55,13 +56,22 @@ export async function renderSettings(root: HTMLElement) {
       </section>
 
       <section class="panel">
-        <h2 class="panel-title">${icon("shieldCheck")} Flathub</h2>
-        <div class="pref-row" style="border-top:0;padding-top:0">
-          <div class="pref-text">
-            <span class="pref-name">Flathub remote ${info.flathubEnabled ? '<span class="pill-ok" style="margin-left:6px">Enabled</span>' : '<span class="pill-off" style="margin-left:6px">Not added</span>'}</span>
-            <span class="pref-desc">Flathub is the app store behind "Flatpak". Without its remote, Flatpak installs have nowhere to come from.</span>
+        <h2 class="panel-title">${icon("shieldCheck")} Dependencies</h2>
+        <div class="dep-rows">
+          <div class="pref-row" style="border-top:0;padding-top:0">
+            <div class="pref-text">
+              <span class="pref-name">Flatpak ${backends.some(b => b.id === "flatpak" && b.available) ? '<span class="pill-ok" style="margin-left:6px">Installed</span>' : '<span class="pill-off" style="margin-left:6px">Not installed</span>'}</span>
+              <span class="pref-desc">Most apps on Flathub install through Flatpak. If it isn't here yet, U Store can install it with your distro's package manager.</span>
+            </div>
+            ${backends.some(b => b.id === "flatpak" && b.available) ? "" : `<button class="btn" id="install-flatpak">${icon("download")} Install Flatpak</button>`}
           </div>
-          ${info.flathubEnabled ? "" : `<button class="btn" id="enable-flathub">Enable Flathub</button>`}
+          <div class="pref-row">
+            <div class="pref-text">
+              <span class="pref-name">Flathub remote ${info.flathubEnabled ? '<span class="pill-ok" style="margin-left:6px">Enabled</span>' : '<span class="pill-off" style="margin-left:6px">Not added</span>'}</span>
+              <span class="pref-desc">Flathub is where Flatpak apps come from. Enabled automatically on the first install, or now with one click.</span>
+            </div>
+            ${info.flathubEnabled ? "" : `<button class="btn ghost" id="enable-flathub">Enable Flathub</button>`}
+          </div>
         </div>
       </section>
 
@@ -104,6 +114,21 @@ export async function renderSettings(root: HTMLElement) {
 
     </div>
   </div>`;
+
+  root.querySelector("#install-flatpak")?.addEventListener("click", async (event) => {
+    const btn = event.currentTarget as HTMLButtonElement;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner"></span> Installing Flatpak…`;
+    const ok = await installFlatpak(() => {});
+    if (ok) {
+      toast("Flatpak installed — Flathub is ready too.", "ok");
+      void renderSettings(root);
+    } else {
+      btn.disabled = false;
+      btn.innerHTML = `${icon("download")} Install Flatpak`;
+      toast("Couldn't install Flatpak — see the output/logs.", "error");
+    }
+  });
 
   root.querySelector("#enable-flathub")?.addEventListener("click", async (event) => {
     const btn = event.currentTarget as HTMLButtonElement;

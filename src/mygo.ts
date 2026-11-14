@@ -252,6 +252,16 @@ export const Store = {
   install(id: string, backend: string, progress: Channel<InstallEvent>): Promise<void> {
     return call("Store.Install", id, backend, progress);
   },
+  /**
+   * InstallFlatpak installs the Flatpak package through this machine's native
+   * package manager and makes it available to the store immediately (the
+   * registry is re-detected). It does nothing when Flatpak is already present.
+   * Flathub is registered afterwards (user scope) so the first app install
+   * needs no second step.
+   */
+  installFlatpak(progress: Channel<InstallEvent>): Promise<void> {
+    return call("Store.InstallFlatpak", progress);
+  },
   /** InstallLocal installs or integrates a previously inspected package file. */
   installLocal(path: string, progress: Channel<InstallEvent>): Promise<void> {
     return call("Store.InstallLocal", path, progress);

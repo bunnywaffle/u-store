@@ -130,6 +130,18 @@ export async function removeApp(id: string, backend: string, onProgress: Progres
   }
 }
 
+/** Run Store.installFlatpak with progress events. Resolves true on success. */
+export async function installFlatpak(onProgress: ProgressListener): Promise<boolean> {
+  const ch = new Channel<InstallEvent>();
+  ch.onmessage = onProgress;
+  try {
+    await Store.installFlatpak(ch);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Run Store.updateAll and stream events. Resolves true on success. */
 export async function updateAll(onProgress: ProgressListener): Promise<boolean> {
   const ch = new Channel<InstallEvent>();

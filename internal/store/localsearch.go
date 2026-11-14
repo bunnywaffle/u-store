@@ -292,7 +292,7 @@ func (s *Store) SearchLocal(ctx context.Context, query string) LocalSearchResult
 		return result
 	}
 	var out []LocalHit
-	for _, src := range s.registry.sources {
+	for _, src := range s.reg().sources {
 		ls, ok := src.(localSearcher)
 		if !ok {
 			continue

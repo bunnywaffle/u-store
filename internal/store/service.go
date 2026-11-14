@@ -23,11 +23,28 @@ type Store struct {
 	flathub  *Flathub
 	theme    string
 
-	mu             sync.Mutex
-	installed      map[string]map[string]string // backend -> ref -> scope
-	installedAt    time.Time
-	updates        []UpdateInfo
-	updatesAt      time.Time
+	regMu       sync.Mutex // guards s.registry pointer swaps and copies
+	mu          sync.Mutex
+	installed   map[string]map[string]string // backend -> ref -> scope
+	installedAt time.Time
+	updates     []UpdateInfo
+	updatesAt   time.Time
+}
+
+// reg returns the current detection registry under lock; the registry object
+// itself is immutable after construction, so copying the pointer is enough.
+func (s *Store) reg() *registry {
+	s.regMu.Lock()
+	defer s.regMu.Unlock()
+	return s.registry
+}
+
+// refreshRegistry re-probes the machine and swaps the detection pointer.
+// Called after installing a new backend mid-session (e.g. Flatpak).
+func (s *Store) refreshRegistry() {
+	s.regMu.Lock()
+	s.registry = detectSources(s.distro)
+	s.regMu.Unlock()
 }
 
 // New builds a Store, detecting the machine and loading the catalog.
@@ -52,14 +69,14 @@ func New() (*Store, error) {
 // Info reports the distro, architecture and detected package backends.
 func (s *Store) Info() SystemInfo {
 	nativeID := ""
-	for _, info := range s.registry.infos() {
+	for _, info := range s.reg().infos() {
 		if info.Kind == "native" && info.Available {
 			nativeID = info.ID
 			break
 		}
 	}
 	enabled := false
-	if fp := s.registry.byID("flatpak"); fp != nil {
+	if fp := s.reg().byID("flatpak"); fp != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		enabled = len(flathubScopes(ctx)) > 0
 		cancel()
@@ -69,7 +86,7 @@ func (s *Store) Info() SystemInfo {
 		DistroName:      s.distro.Name,
 		PrettyName:      s.distro.Pretty,
 		Arch:            s.distro.Arch,
-		Backends:        s.registry.infos(),
+		Backends:        s.reg().infos(),
 		FlathubEnabled:  enabled,
 		NativeBackendID: nativeID,
 		Theme:           s.theme,
@@ -91,7 +108,7 @@ func (s *Store) installedSets(ctx context.Context) map[string]map[string]string 
 		return s.installed
 	}
 	sets := map[string]map[string]string{}
-	for _, src := range s.registry.sources {
+	for _, src := range s.reg().sources {
 		refs, err := src.installedRefs(ctx)
 		if err == nil {
 			sets[src.info().ID] = refs
@@ -148,16 +165,16 @@ var nativeBackendIDs = []string{"apt", "dnf", "pacman", "zypper", "apk"}
 // sourcesFor lists backends an app can be installed from, flatpak first.
 func (s *Store) sourcesFor(id string) []string {
 	var out []string
-	if s.registry.byID("flatpak") != nil {
+	if s.reg().byID("flatpak") != nil {
 		out = append(out, "flatpak")
 	}
 	for _, native := range nativeBackendIDs {
-		if s.registry.byID(native) != nil && s.catalog.NativePackage(id, native) != "" {
+		if s.reg().byID(native) != nil && s.catalog.NativePackage(id, native) != "" {
 			out = append(out, native)
 			break // only this machine's native family
 		}
 	}
-	if s.registry.byID("snap") != nil && s.catalog.NativePackage(id, "snap") != "" {
+	if s.reg().byID("snap") != nil && s.catalog.NativePackage(id, "snap") != "" {
 		out = append(out, "snap")
 	}
 	return out
@@ -180,7 +197,7 @@ func (s *Store) summary(app catalogApp, sets map[string]map[string]string) AppSu
 	installed, _ := s.lookupInstalled(sets, app.ID)
 	nativePkg := ""
 	for _, native := range nativeBackendIDs {
-		if ref := s.catalog.NativePackage(app.ID, native); ref != "" && s.registry.byID(native) != nil {
+		if ref := s.catalog.NativePackage(app.ID, native); ref != "" && s.reg().byID(native) != nil {
 			nativePkg = ref
 			break
 		}
@@ -224,7 +241,7 @@ func (s *Store) flathubSummary(hit flathubHit, sets map[string]map[string]string
 	}
 	nativePkg := ""
 	for _, native := range nativeBackendIDs {
-		if ref := s.catalog.NativePackage(id, native); ref != "" && s.registry.byID(native) != nil {
+		if ref := s.catalog.NativePackage(id, native); ref != "" && s.reg().byID(native) != nil {
 			nativePkg = ref
 			break
 		}
@@ -382,9 +399,9 @@ func (s *Store) Install(ctx context.Context, id, backend string, progress *mygo.
 	if backend == "" {
 		backend = s.preferredBackend(id)
 	}
-	src := s.registry.byID(backend)
+	src := s.reg().byID(backend)
 	if src == nil {
-		return fmt.Errorf("the %s backend is not available on this machine", backend)
+		return fmt.Errorf("%s isn’t available on this machine — install it first (see Settings → Dependencies)", backend)
 	}
 	ref, err := resolveRef(s, id, backend)
 	if err != nil {
@@ -414,9 +431,9 @@ func (s *Store) Remove(ctx context.Context, id, backend string, progress *mygo.C
 	if backend == "" {
 		backend = s.preferredBackend(id)
 	}
-	src := s.registry.byID(backend)
+	src := s.reg().byID(backend)
 	if src == nil {
-		return fmt.Errorf("the %s backend is not available on this machine", backend)
+		return fmt.Errorf("%s isn’t available on this machine — install it first (see Settings → Dependencies)", backend)
 	}
 	ref, err := resolveRef(s, id, backend)
 	if err != nil {
@@ -445,9 +462,9 @@ func (s *Store) Launch(ctx context.Context, id, backend string) error {
 	if backend == "" {
 		backend = s.preferredBackend(id)
 	}
-	src := s.registry.byID(backend)
+	src := s.reg().byID(backend)
 	if src == nil {
-		return fmt.Errorf("the %s backend is not available on this machine", backend)
+		return fmt.Errorf("%s isn’t available on this machine — install it first (see Settings → Dependencies)", backend)
 	}
 	ref, err := resolveRef(s, id, backend)
 	if err != nil {
@@ -521,7 +538,7 @@ func (s *Store) Updates(ctx context.Context) ([]UpdateInfo, error) {
 	s.mu.Unlock()
 
 	var out []UpdateInfo
-	for _, src := range s.registry.sources {
+	for _, src := range s.reg().sources {
 		u, err := src.updates(ctx)
 		if err != nil {
 			continue
@@ -573,7 +590,7 @@ func (s *Store) UpdateAll(ctx context.Context, progress *mygo.Channel[InstallEve
 	emit := func(ev InstallEvent) { _ = progress.Send(ev) }
 	emit(InstallEvent{Type: "start", Message: "Checking for updates…", Percent: -1})
 	updates, _ := s.Updates(ctx)
-	for _, src := range s.registry.sources {
+	for _, src := range s.reg().sources {
 		var refs []UpdateInfo
 		for _, u := range updates {
 			if u.Backend == src.info().ID {
