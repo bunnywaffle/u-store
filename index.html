@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>U Store</title>
+    <link rel="stylesheet" href="./src/style.css" />
+    <link rel="icon" type="image/png" href="/bag.png" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Custom title bar: drag region with centered search -->
+      <header class="titlebar" data-drag>
+        <div class="tb-side tb-left">
+          <div class="brand">
+            <span class="brand-mark"><img src="/bag-small.png" alt="U Store logo" width="26" height="26" /></span>
+            <span class="brand-name">U&nbsp;Store</span>
+          </div>
+          <button class="icon-btn" id="refresh-btn" title="Re-check for updates" aria-label="Re-check for updates"></button>
+        </div>
+        <div class="tb-side tb-center">
+          <label class="search" for="search-input">
+            <span class="search-icon" id="search-icon"></span>
+            <input id="search-input" type="text" placeholder="Search apps…" autocomplete="off" spellcheck="false" />
+            <kbd>/</kbd>
+          </label>
+        </div>
+        <div class="tb-side tb-right" aria-hidden="true"></div>
+      </header>
+
+      <div class="body">
+        <!-- Sidebar -->
+        <nav class="sidebar" aria-label="Navigation">
+          <p class="side-label">Store</p>
+          <ul class="side-nav">
+            <li><button class="side-item is-active" data-route="discover" data-icon="compass"><span>Discover</span></button></li>
+            <li><button class="side-item" data-route="browse" data-icon="grid"><span>Browse</span></button></li>
+            <li><button class="side-item" data-route="installed" data-icon="package"><span>Installed</span></button></li>
+            <li><button class="side-item" data-route="updates" data-icon="refresh"><span>Updates</span><span class="badge" id="updates-badge" hidden></span></button></li>
+          </ul>
+          <p class="side-label">Tools</p>
+          <ul class="side-nav">
+            <li><button class="side-item" data-route="local" data-icon="download"><span>Install file…</span></button></li>
+          </ul>
+          <div class="side-foot">
+            <button class="side-item" data-route="settings" data-icon="gear"><span>Settings</span></button>
+            <div class="sys-card" id="sys-card" title="Detected system">
+              <span class="sys-dot"></span>
+              <div class="sys-text">
+                <span class="sys-distro" id="sys-distro">Detecting…</span>
+                <span class="sys-backends" id="sys-backends"></span>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        <!-- Content -->
+        <main class="content" id="content" tabindex="-1"></main>
+      </div>
+
+      <!-- Toast -->
+      <div class="toast-root" id="toast-root" aria-live="polite"></div>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
