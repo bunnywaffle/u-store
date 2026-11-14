@@ -161,6 +161,15 @@ export interface LocalPackage {
   needsAuth: boolean;
 }
 
+/**
+ * LocalSearchResult carries both what worked and what didn't, so the UI can
+ * show hits from one repo beside an explanation of another's failure.
+ */
+export interface LocalSearchResult {
+  hits: LocalHit[];
+  errors: string[];
+}
+
 /** SearchResult is one page of search hits. */
 export interface SearchResult {
   query: string;
@@ -265,9 +274,10 @@ export const Store = {
   },
   /**
    * SearchLocal queries the machine's own repositories for packages matching
-   * the query. Results are capped; failures of one backend never sink the rest.
+   * the query. Backend failures are reported inside the result, never thrown:
+   * a slow or unreachable repo must not blank the ones that answered.
    */
-  searchLocal(query: string): Promise<LocalHit[]> {
+  searchLocal(query: string): Promise<LocalSearchResult> {
     return call("Store.SearchLocal", query);
   },
   /** SetTheme persists and applies the mode. Bound to the frontend. */

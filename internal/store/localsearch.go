@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -69,7 +70,7 @@ func (d dnfSource) localSearch(ctx context.Context, query string) ([]LocalHit, e
 	if token == "" {
 		return nil, nil
 	}
-	out, err := queryCmd(ctx, 45*time.Second, d.bin(), "repoquery", "--quiet",
+	out, err := queryCmd(ctx, 120*time.Second, d.bin(), "repoquery", "--quiet",
 		"--qf", "%{name}\t%{summary}\n", "*"+token+"*")
 	if err != nil {
 		return nil, err
@@ -184,9 +185,9 @@ func (zypperSource) localSearch(ctx context.Context, query string) ([]LocalHit, 
 		if name == "" || name == "Name" || strings.ContainsAny(name, " ") {
 			continue
 		}
-		summary := ""
-		if len(fields) >= 4 {
-			summary = strings.TrimSpace(fields[3])
+		summary := strings.TrimSpace(fields[len(fields)-1])
+		if summary == name {
+			summary = ""
 		}
 		_, installed := sets[name]
 		hits = append(hits, LocalHit{Name: name, Summary: summary, Backend: "zypper", Installed: installed})
@@ -261,14 +262,22 @@ func (snapSource) localSearch(ctx context.Context, query string) ([]LocalHit, er
 	return capLocalHits(hits), nil
 }
 
+// LocalSearchResult carries both what worked and what didn't, so the UI can
+// show hits from one repo beside an explanation of another's failure.
+type LocalSearchResult struct {
+	Hits   []LocalHit `json:"hits"`
+	Errors []string   `json:"errors"`
+}
+
 // SearchLocal queries the machine's own repositories for packages matching
-// the query. Results are capped; failures of one backend never sink the rest.
-func (s *Store) SearchLocal(ctx context.Context, query string) ([]LocalHit, error) {
+// the query. Backend failures are reported inside the result, never thrown:
+// a slow or unreachable repo must not blank the ones that answered.
+func (s *Store) SearchLocal(ctx context.Context, query string) LocalSearchResult {
+	var result LocalSearchResult
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return nil, nil
+		return result
 	}
-	var out []LocalHit
 	for _, src := range s.registry.sources {
 		ls, ok := src.(localSearcher)
 		if !ok {
@@ -276,14 +285,15 @@ func (s *Store) SearchLocal(ctx context.Context, query string) ([]LocalHit, erro
 		}
 		hits, err := ls.localSearch(ctx, query)
 		if err != nil {
-			continue // a repo that can't be queried must not break the rest
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", src.info().Name, err))
+			continue
 		}
-		out = append(out, hits...)
+		result.Hits = append(result.Hits, hits...)
 	}
-	if len(out) > maxLocalHits {
-		out = out[:maxLocalHits]
+	if len(result.Hits) > maxLocalHits {
+		result.Hits = result.Hits[:maxLocalHits]
 	}
-	return out, nil
+	return result
 }
 
 // localInstallRef resolves an install ref for a package that may not be in
