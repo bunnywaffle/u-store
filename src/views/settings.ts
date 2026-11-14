@@ -94,7 +94,7 @@ export async function renderSettings(root: HTMLElement) {
       <section class="panel">
         <h2 class="panel-title">${icon("info")} About</h2>
         <dl class="kv">
-          <dt>Version</dt><dd>U Store 0.1.0</dd>
+          <dt>Version</dt><dd>U Store 0.2.0</dd>
           <dt>License</dt><dd>MIT</dd>
           <dt>Sources</dt><dd>Flathub (flatpak) ${info.nativeBackendId ? ", your distro's repositories, " : ""}and Snap when present</dd>
           <dt>Built with</dt><dd>Go · MyGo — a native app, not a web page in disguise</dd>
