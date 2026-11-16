@@ -29,6 +29,10 @@ type flathubSearchRequest struct {
 	Lang    string `json:"lang"`
 	Page    int    `json:"page"`
 	PerPage int    `json:"per_page"`
+	Filters []struct {
+		FilterType string `json:"filterType"`
+		Value      string `json:"value"`
+	} `json:"filters,omitempty"`
 }
 
 type flathubSearchResponse struct {
@@ -77,23 +81,41 @@ type flathubHit struct {
 // Search queries Flathub. An empty query returns the most installed apps,
 // which is exactly what the Discover view wants.
 func (f *Flathub) Search(ctx context.Context, query string, page, perPage int) (hits []flathubHit, total int, err error) {
+	return f.searchFiltered(ctx, query, "", page, perPage)
+}
+
+// SearchInCategory lists apps in one Flathub main category (network,
+// audiovideo, development, education, game, graphics, office, science,
+// system, utility).
+func (f *Flathub) SearchInCategory(ctx context.Context, category string, page, perPage int) (hits []flathubHit, total int, err error) {
+	return f.searchFiltered(ctx, "", category, page, perPage)
+}
+
+func (f *Flathub) searchFiltered(ctx context.Context, query, category string, page, perPage int) (hits []flathubHit, total int, err error) {
 	if perPage <= 0 || perPage > 100 {
 		perPage = 48
 	}
 	if page < 1 {
 		page = 1
 	}
-	body, err := json.Marshal(flathubSearchRequest{Query: query, Lang: "en", Page: page, PerPage: perPage})
+	reqBody := flathubSearchRequest{Query: query, Lang: "en", Page: page, PerPage: perPage}
+	if category != "" {
+		reqBody.Filters = []struct {
+			FilterType string `json:"filterType"`
+			Value      string `json:"value"`
+		}{{FilterType: "main_categories", Value: category}}
+	}
+	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, 0, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, flathubBase+"/v2/search", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, flathubBase+"/v2/search", bytes.NewReader(body))
 	if err != nil {
 		return nil, 0, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "UniversalStore/0.1 (+https://mygo.run)")
-	resp, err := f.client.Do(req)
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("User-Agent", "UStore/0.3 (+https://github.com/bunnywaffle/u-store)")
+	resp, err := f.client.Do(httpReq)
 	if err != nil {
 		return nil, 0, err
 	}

@@ -8,8 +8,13 @@ and WebKitGTK on Linux.
 ## What it does
 
 - **Discover** — featured picks (curated) + live trending apps streamed from Flathub.
-- **Browse** — categories; selecting one runs a live Flathub search by category.
-- **Search** — debounced, live Flathub search; falls back to the embedded catalog offline.
+- **Browse** — every Flathub app in each category (server-side category filter,
+  most-installed first), paged 21 at a time with Load more. Categories match
+  Flathub's main categories: Network 335, Audio & Video 376, Games 756, …
+- **Search** — debounced, live Flathub search plus a parallel live query of your
+  own repositories (apt/dnf/pacman/zypper/apk/snap). Native packages render as
+  matching cards with icons and open a synthesized detail page (version, license,
+  repository) sourced from your repo — same detail view, same install flow.
 - **Installed** — one list merged from every backend on the machine (Flatpak user +
   system, native, Snap), with Open and two-click-confirm Remove.
 - **Updates** — pending updates from every backend, applied transactionally (native

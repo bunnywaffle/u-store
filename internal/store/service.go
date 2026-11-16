@@ -268,13 +268,29 @@ func (s *Store) flathubSummary(hit flathubHit, sets map[string]map[string]string
 // online the homepage is whatever Flathub says people install right now.
 // When Flathub is unreachable it degrades to the embedded catalog.
 func (s *Store) Discover(ctx context.Context) (DiscoverResult, error) {
-	sets := s.installedSets(ctx)
+	// Installed-state lookup and the Flathub call are independent — run both
+	// at once so the page paints faster.
+	type searchResult struct {
+		hits  []flathubHit
+		total int
+		err   error
+	}
+	type setsResult struct{ sets map[string]map[string]string }
+	searchCh := make(chan searchResult, 1)
+	setsCh := make(chan setsResult, 1)
+	go func() {
+		hits, total, err := s.flathub.Search(ctx, "", 1, 24)
+		searchCh <- searchResult{hits, total, err}
+	}()
+	go func() {
+		setsCh <- setsResult{s.installedSets(ctx)}
+	}()
+	sr := <-searchCh
+	sets := (<-setsCh).sets
 	trending := []AppSummary{}
-	fromFlathub := false
-	hits, _, err := s.flathub.Search(ctx, "", 1, 24)
-	if err == nil {
-		fromFlathub = true
-		for _, hit := range hits {
+	fromFlathub := sr.err == nil
+	if fromFlathub {
+		for _, hit := range sr.hits {
 			trending = append(trending, s.flathubSummary(hit, sets))
 		}
 	} else {
@@ -300,10 +316,47 @@ func (s *Store) Search(ctx context.Context, query string) (SearchResult, error) 
 	if query == "" {
 		return result, nil
 	}
-	sets := s.installedSets(ctx)
-	hits, total, err := s.flathub.Search(ctx, query, 1, 48)
-	if err != nil {
+	type searchResult struct {
+		hits  []flathubHit
+		total int
+		err   error
+	}
+	type setsResult struct{ sets map[string]map[string]string }
+	searchCh := make(chan searchResult, 1)
+	setsCh := make(chan setsResult, 1)
+	go func() {
+		hits, total, err := s.flathub.Search(ctx, query, 1, 48)
+		searchCh <- searchResult{hits, total, err}
+	}()
+	go func() {
+		setsCh <- setsResult{s.installedSets(ctx)}
+	}()
+	sr := <-searchCh
+	sets := (<-setsCh).sets
+	if sr.err != nil {
 		for _, app := range s.catalog.Search(query) {
+			result.Hits = append(result.Hits, s.summary(app, sets))
+		}
+		result.Total = len(result.Hits)
+		result.FromFlathub = false
+		return result, nil
+	}
+	for _, hit := range sr.hits {
+		result.Hits = append(result.Hits, s.flathubSummary(hit, sets))
+	}
+	result.Total = sr.total
+	result.FromFlathub = true
+	return result, nil
+}
+
+// SearchCategory lists apps in a Flathub main category, paged, sorted by installs.
+func (s *Store) SearchCategory(ctx context.Context, category string, page int) (SearchResult, error) {
+	result := SearchResult{Query: category}
+	page = max(1, page)
+	sets := s.installedSets(ctx)
+	hits, total, err := s.flathub.SearchInCategory(ctx, category, page, 48)
+	if err != nil {
+		for _, app := range s.catalog.ForCategory(category) {
 			result.Hits = append(result.Hits, s.summary(app, sets))
 		}
 		result.Total = len(result.Hits)

@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -12,6 +13,12 @@ import (
 )
 
 func main() {
+	// Work around the classic KDE-Wayland WebKitGTK jank: DMA-BUF sometimes
+	// renders everything slowly. Can override with USTORE_DISABLE_DMABUF=0.
+	if os.Getenv("USTORE_DISABLE_DMABUF") != "0" {
+		os.Setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
+	}
+
 	svc, err := store.New()
 	if err != nil {
 		log.Fatalf("universal-store: %v", err)

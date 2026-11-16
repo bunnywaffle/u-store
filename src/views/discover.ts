@@ -47,7 +47,7 @@ export async function renderDiscover(root: HTMLElement, navigate: Navigate, onCh
           <button class="btn hero-ghost" id="hero-learn">Learn more</button>
         </div>
       </div>
-      <img class="hero-icon" src="${esc(hero.icon)}" alt="${esc(hero.name)} icon" width="132" height="132" data-fallback-id="${esc(hero.id)}" data-fallback-letter="${esc(hero.name[0] ?? "?").toUpperCase()}" data-fallback-hue="#3f3f3f" referrerpolicy="no-referrer" />
+      <img class="hero-icon" src="${esc(hero.icon)}" alt="${esc(hero.name)} icon" width="132" height="132" fetchpriority="high" data-fallback-id="${esc(hero.id)}" data-fallback-letter="${esc(hero.name[0] ?? "?").toUpperCase()}" data-fallback-hue="#3f3f3f" referrerpolicy="no-referrer" />
     </section>` : ""}
 
     ${rest.length ? `

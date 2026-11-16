@@ -36,18 +36,31 @@ export async function renderDetail(root: HTMLElement, navigate: Navigate, onChan
   root.innerHTML = `<div class="view"><div class="detail-back" role="button" tabindex="0" id="back">${icon("arrowLeft")} Back</div><div class="skeleton" style="height:170px;border-radius:var(--radius-xl)"></div><div class="skeleton" style="height:120px;border-radius:var(--radius-lg);margin-top:18px"></div></div>`;
   root.querySelector("#back")!.addEventListener("click", () => (back ?? (() => navigate("discover")))());
 
-  // Screenshots: click to open a fullscreen-ish lightbox
-  root.querySelectorAll<HTMLButtonElement>(".screen").forEach((btn) =>
-    btn.addEventListener("click", () => openLightbox(btn.dataset.shot!, app.name))
-  );
-
   let app: AppDetails;
-  try {
-    app = await Store.appDetails(id);
-  } catch {
-    root.innerHTML = `<div class="view"><button class="detail-back" id="back">${icon("arrowLeft")} Back</button>${emptyState("wifiOff", "Couldn't load this app", isMyGo ? "Check your network connection and try again." : "Run inside U Store to see live app details.")}</div>`;
-    root.querySelector("#back")?.addEventListener("click", () => navigate("discover"));
-    return;
+  if (id.startsWith("native:")) {
+    const native = id.slice(7).split(":");
+    const backend = native[0];
+    const ref = native.slice(1).join(":");
+    if (!backend || !ref) {
+      root.innerHTML = `<div class="view"><button class="detail-back" id="back">${icon("arrowLeft")} Back</button>${emptyState("x", "Bad native package link", "")}</div>`;
+      root.querySelector("#back")?.addEventListener("click", back ?? (() => navigate("discover")));
+      return;
+    }
+    try {
+      app = await Store.nativeDetails(backend, ref);
+    } catch (err) {
+      root.innerHTML = `<div class="view"><button class="detail-back" id="back">${icon("arrowLeft")} Back</button>${emptyState("wifiOff", "Couldn't read package info", String((err as Error)?.message ?? err))}</div>`;
+      root.querySelector("#back")?.addEventListener("click", back ?? (() => navigate("discover")));
+      return;
+    }
+  } else {
+    try {
+      app = await Store.appDetails(id);
+    } catch {
+      root.innerHTML = `<div class="view"><button class="detail-back" id="back">${icon("arrowLeft")} Back</button>${emptyState("wifiOff", "Couldn't load this app", isMyGo ? "Check your network connection and try again." : "Run inside U Store to see live app details.")}</div>`;
+      root.querySelector("#back")?.addEventListener("click", () => navigate("discover"));
+      return;
+    }
   }
 
   const native = nativeOptionFor(app);
@@ -99,7 +112,7 @@ export async function renderDetail(root: HTMLElement, navigate: Navigate, onChan
         .join("")}</div>` : ""}
 
     ${app.description ? `<div class="desc">${sanitizeHTML(app.description)}</div>` : ""}
-    ${app.homepage ? `<p style="margin:18px 4px 0"><a class="btn ghost sm" href="${esc(app.homepage)}" target="_blank" rel="noreferrer noopener">${icon("external")} Website</a> <a class="btn ghost sm" href="https://flathub.org/apps/${esc(app.id)}" target="_blank" rel="noreferrer noopener">${icon("external")} View on Flathub</a></p>` : `<p style="margin:18px 4px 0"><a class="btn ghost sm" href="https://flathub.org/apps/${esc(app.id)}" target="_blank" rel="noreferrer noopener">${icon("external")} View on Flathub</a></p>`}
+    ${app.homepage || app.origin === "flathub" ? `<p style="margin:18px 4px 0">${app.homepage ? `<a class="btn ghost sm" href="${esc(app.homepage)}" target="_blank" rel="noreferrer noopener">${icon("external")} Website</a>` : ""} ${app.origin === "flathub" ? `<a class="btn ghost sm" href="https://flathub.org/apps/${esc(app.id)}" target="_blank" rel="noreferrer noopener">${icon("external")} View on Flathub</a>` : ""}</p>` : ""}
   </div>`;
 
   root.querySelector("#back")!.addEventListener("click", () => navigate("discover"));

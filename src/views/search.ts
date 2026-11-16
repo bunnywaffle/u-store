@@ -1,5 +1,5 @@
-import { Store, isMyGo, backendName, installApp, type LocalHit } from "../api";
-import { appCard, emptyState, esc, notice, skeletonGrid, toast } from "../components";
+import { Store, isMyGo, backendName, type LocalHit, type AppSummary } from "../api";
+import { appCard, emptyState, esc, notice, skeletonGrid } from "../components";
 import { icon } from "../icons";
 import { wireCardActions } from "../actions";
 
@@ -14,11 +14,26 @@ export async function renderSearch(root: HTMLElement, navigate: Navigate, onChan
 
   const [res, local] = await Promise.all([
     Store.search(query).catch(() => null),
-    Store.searchLocal(query).catch((err) => ({ hits: [], errors: [`Couldn't reach the package manager: ${err?.message ?? err}`] })),
+    Store.searchLocal(query).catch(() => ({ hits: [], errors: [`Couldn't reach the package manager`] }) as { hits: LocalHit[]; errors: string[] }),
   ]);
 
-  const localHits = local.hits;
-  const localErrors = (local.errors ?? []).filter(Boolean);
+  const localHits: LocalHit[] = local.hits ?? [];
+  const localErrors: string[] = (local.errors ?? []).filter(Boolean);
+
+  // Native hits become real cards in the same grid — same look, same behavior.
+  const localCards: AppSummary[] = localHits.map((hit) => ({
+    id: `native:${hit.backend}:${hit.name}`,
+    name: hit.name,
+    summary: hit.summary || `${backendName(hit.backend)} package`,
+    icon: hit.icon ?? "",
+    categories: [],
+    verified: false,
+    source: hit.backend,
+    sources: [hit.backend],
+    nativePackage: hit.name,
+    installed: hit.installed,
+    featured: false,
+  }));
 
   const header = `
     <div class="view-head">
@@ -26,27 +41,27 @@ export async function renderSearch(root: HTMLElement, navigate: Navigate, onChan
         <h1 class="view-title">Results for “${esc(query)}”</h1>
         <p class="view-sub">${res
           ? `${res.total.toLocaleString()} ${res.total === 1 ? "app" : "apps"} ${res.fromFlathub ? "on Flathub" : "in the built-in catalog"}`
-          : "Flathub unreachable"}${localHits.length ? ` · ${localHits.length} from your repos` : ""}</p>
+          : "Flathub unreachable"}${localCards.length ? ` · ${localCards.length} from your repos` : ""}</p>
       </div>
     </div>`;
 
   const flathubBody = res && res.hits.length > 0
     ? `<div class="app-grid">${res.hits.map(appCard).join("")}</div>`
     : "";
-  const localBody = localHits.length
-    ? `<h2 class="section-label"><span>From your distro's package manager${localHits[0]?.backend ? ` (${esc(backendName(localHits[0].backend))})` : ""}</span></h2>
-       <div class="list">${localHits.map(localRow).join("")}</div>`
+  const localBody = localCards.length
+    ? `<h2 class="section-label"><span>From your package manager (${esc(backendName(localCards[0]!.source))})</span></h2>
+       <div class="app-grid">${localCards.map(appCard).join("")}</div>`
     : "";
   const localErrorsBody = localErrors.length
     ? notice(`Couldn't query your package manager${localErrors.length > 1 ? "s" : ""}: ${localErrors.join(" · ")}`)
     : "";
 
   const offline = res !== null && res.fromFlathub === false;
-  const nothingFound = res !== null && res.hits.length === 0 && localHits.length === 0;
-  const unavailable = res === null && localHits.length === 0;
+  const nothingFound = res !== null && res.hits.length === 0 && localCards.length === 0;
+  const unavailable = res === null && localCards.length === 0;
 
   const body = unavailable
-    ? emptyState("wifiOff", "Search is unavailable", isMyGo
+    ? emptyState("wifiOff", "Search unavailable", isMyGo
         ? "Check your network connection and try again."
         : "Run inside U Store to see live search.")
     : nothingFound
@@ -55,56 +70,6 @@ export async function renderSearch(root: HTMLElement, navigate: Navigate, onChan
 
   root.innerHTML = `<div class="view">${offline && !localBody ? notice("Flathub unavailable — showing built-in catalog matches only.", "info") : ""}${header}${localErrorsBody}${body}</div>`;
 
-  const grid = root.querySelector<HTMLElement>(".app-grid");
-  if (grid) wireCardActions(grid, navigate, onChanged);
-  wireLocalActions(root, onChanged);
-}
-
-function localRow(hit: LocalHit): string {
-  const letter = esc((hit.name.trim()[0] ?? "?").toUpperCase());
-  const iconHtml = hit.icon
-    ? `<img class="app-icon" src="${esc(hit.icon)}" alt="" width="56" height="56" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-fallback-id="${esc(hit.name)}" data-fallback-letter="${letter}" data-fallback-hue="#4d4d4d" />`
-    : `<span class="icon-tile" aria-hidden="true">${letter}</span>`;
-  return `
-  <div class="list-row">
-    ${iconHtml}
-    <div class="row-main">
-      <span class="row-title">${esc(hit.name)}</span>
-      <div class="row-sub">${hit.summary ? esc(hit.summary) : `${esc(backendName(hit.backend))} package`}</div>
-    </div>
-    <span class="source-pill">${esc(backendName(hit.backend))}</span>
-    <div class="row-actions">
-      ${hit.installed
-        ? `<span class="source-pill" style="color:var(--ok);border-color:transparent;background:var(--ok-soft)">Installed</span>`
-        : `<button class="btn sm" data-local-get="${esc(hit.name)}" data-backend="${esc(hit.backend)}">${icon("download")} Install</button>`}
-    </div>
-  </div>`;
-}
-
-function wireLocalActions(root: HTMLElement, onChanged: () => void) {
-  root.addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    const btn = target.closest<HTMLButtonElement>("[data-local-get]");
-    if (!btn || btn.disabled || btn.dataset.wired === "1") return;
-    btn.dataset.wired = "1"; // the content root is reused across renders — wire each button once
-    const name = btn.dataset.localGet!;
-    const backend = btn.dataset.backend!;
-    btn.disabled = true;
-    btn.innerHTML = `<span class="spinner"></span>`;
-    void installApp(name, backend, () => {}).then((ok) => {
-      if (ok) {
-        const pill = document.createElement("span");
-        pill.className = "source-pill";
-        pill.textContent = "Installed";
-        pill.style.cssText = "color:var(--ok);border-color:transparent;background:var(--ok-soft)";
-        btn.replaceWith(pill);
-        toast(`${name} installed.`, "ok");
-        onChanged();
-      } else {
-        btn.disabled = false;
-        btn.innerHTML = `${icon("download")} Install`;
-        toast("Install failed.", "error");
-      }
-    });
-  });
+  const grid = root.querySelectorAll<HTMLElement>(".app-grid");
+  grid.forEach((g) => wireCardActions(g, navigate, onChanged));
 }

@@ -275,6 +275,13 @@ export const Store = {
     return call("Store.Launch", id, backend);
   },
   /**
+   * NativeDetails returns metadata for a repo package, shaped like AppDetails.
+   * Installed state comes from the same detection as everything else.
+   */
+  nativeDetails(backend: string, ref: string): Promise<AppDetails> {
+    return call("Store.NativeDetails", backend, ref);
+  },
+  /**
    * PickLocalPackage opens the system's file picker (filtered to packages)
    * and reports what was chosen. A canceled pick returns a zero LocalPackage.
    */
@@ -288,6 +295,10 @@ export const Store = {
   /** Search queries Flathub live, falling back to the embedded catalog offline. */
   search(query: string): Promise<SearchResult> {
     return call("Store.Search", query);
+  },
+  /** SearchCategory lists apps in a Flathub main category, paged, sorted by installs. */
+  searchCategory(category: string, page: number): Promise<SearchResult> {
+    return call("Store.SearchCategory", category, page);
   },
   /**
    * SearchLocal queries the machine's own repositories for packages matching
