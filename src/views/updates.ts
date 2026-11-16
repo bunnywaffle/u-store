@@ -1,22 +1,34 @@
 import { Store, backendName, updateAll, type UpdateInfo } from "../api";
-import { appIcon, emptyState, esc, toast } from "../components";
+import { appIcon, emptyState, esc, toast, matchesSourceFilter, sourceSegmented, wireSourceFilter, type SourceFilter } from "../components";
 import { icon } from "../icons";
 
 type Navigate = (route: string, param?: string) => void;
 
+let sourceFilter: SourceFilter = "all";
+let lastUpdates: UpdateInfo[] = [];
+
 export async function renderUpdates(root: HTMLElement, navigate: Navigate, onChanged: () => void) {
   root.innerHTML = `<div class="view"><div class="view-head"><div><h1 class="view-title">Updates</h1><p class="view-sub">Checking every source for what's new…</p></div></div><div class="skeleton" style="height:70px;border-radius:var(--radius-lg)"></div></div>`;
 
-  let updates: UpdateInfo[] = [];
   try {
-    updates = await Store.updates();
+    lastUpdates = await Store.updates();
   } catch {
     root.innerHTML = `<div class="view"><div class="view-head"><div><h1 class="view-title">Updates</h1></div></div>${emptyState("wifiOff", "Couldn't check for updates", "The package managers didn't answer. Try again in a moment.")}</div>`;
     return;
   }
 
+  paint(root, navigate, onChanged);
+}
+
+function paint(root: HTMLElement, navigate: Navigate, onChanged: () => void) {
+  const updates = lastUpdates;
+  const filtered = updates.filter((u) => matchesSourceFilter(sourceFilter, [u.backend]));
   const flatpakCount = updates.filter((u) => u.backend === "flatpak").length;
   const nativeCount = updates.length - flatpakCount;
+  const sourceWord =
+    sourceFilter === "all" ? "updates" :
+    sourceFilter === "flatpak" ? "Flatpak updates" :
+    sourceFilter === "snap" ? "Snap updates" : "native updates";
 
   root.innerHTML = `
   <div class="view">
@@ -25,13 +37,16 @@ export async function renderUpdates(root: HTMLElement, navigate: Navigate, onCha
         <h1 class="view-title">Updates</h1>
         <p class="view-sub">${updates.length === 0
           ? "Everything is up to date."
-          : `${updates.length} pending — ${flatpakCount} Flatpak, ${nativeCount} native. Native managers update in one transaction, so everything is updated together.`}</p>
+          : `${updates.length} pending — ${flatpakCount} Flatpak, ${nativeCount} native. Native managers update in one transaction, so everything is updated together. Showing ${filtered.length} ${esc(sourceWord)}.`}</p>
       </div>
       ${updates.length ? `<button class="btn" id="update-all">${icon("download")} Update all</button>` : ""}
     </div>
-    ${updates.length === 0
-      ? emptyState("check", "All caught up", "New versions of your apps will appear here the moment they land in Flathub or your distro's repositories.")
-      : `<div class="list" id="updates-list">${updates.slice(0, 100).map(row).join("")}${updates.length > 100 ? `<p class="view-sub" style="padding:6px 4px">+ ${updates.length - 100} more — native managers apply them all together.</p>` : ""}</div>
+    ${updates.length === 0 ? "" : sourceSegmented("updates-source-filter", sourceFilter)}
+    ${filtered.length === 0
+      ? (updates.length === 0
+          ? emptyState("check", "All caught up", "New versions of your apps will appear here the moment they land in Flathub or your distro's repositories.")
+          : emptyState("check", "Nothing matches this source", "Try updating everything — native managers apply them in one transaction."))
+      : `<div class="list" id="updates-list" style="margin-top:16px">${filtered.slice(0, 100).map(row).join("")}${filtered.length > 100 ? `<p class="view-sub" style="padding:6px 4px">+ ${filtered.length - 100} more — native managers apply them all together.</p>` : ""}</div>
          <pre class="install-console" id="update-console"></pre>
          <div class="progress-track" id="update-track"><div class="progress-fill"></div></div>`}
   </div>`;
@@ -39,6 +54,11 @@ export async function renderUpdates(root: HTMLElement, navigate: Navigate, onCha
   const allBtn = root.querySelector<HTMLButtonElement>("#update-all");
   const consoleEl = root.querySelector<HTMLElement>("#update-console");
   const track = root.querySelector<HTMLElement>("#update-track");
+
+  wireSourceFilter(root, "updates-source-filter", (f) => {
+    sourceFilter = f;
+    paint(root, navigate, onChanged);
+  });
 
   allBtn?.addEventListener("click", async () => {
     allBtn.disabled = true;

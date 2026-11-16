@@ -1,9 +1,11 @@
 import { Store, isMyGo, backendName, type LocalHit, type AppSummary } from "../api";
-import { appCard, emptyState, esc, notice, skeletonGrid } from "../components";
-import { icon } from "../icons";
+import { appCard, emptyState, esc, notice, skeletonGrid, matchesSourceFilter, sourceSegmented, wireSourceFilter, type SourceFilter } from "../components";
 import { wireCardActions } from "../actions";
 
 type Navigate = (route: string, param?: string) => void;
+
+let sourceFilter: SourceFilter = "all";
+let lastData: { query: string; res: Awaited<ReturnType<typeof Store.search>> | null; local: { hits: LocalHit[]; errors: string[] } } | null = null;
 
 export async function renderSearch(root: HTMLElement, navigate: Navigate, onChanged: () => void, query: string) {
   root.innerHTML = `
@@ -14,26 +16,42 @@ export async function renderSearch(root: HTMLElement, navigate: Navigate, onChan
 
   const [res, local] = await Promise.all([
     Store.search(query).catch(() => null),
-    Store.searchLocal(query).catch(() => ({ hits: [], errors: [`Couldn't reach the package manager`] }) as { hits: LocalHit[]; errors: string[] }),
+    Store.searchLocal(query).catch(() => ({ hits: [], errors: ["Couldn't query your package manager"] }) as { hits: LocalHit[]; errors: string[] }),
   ]);
+
+  lastData = { query, res, local };
+  paint(root, navigate, onChanged);
+}
+
+function paint(root: HTMLElement, navigate: Navigate, onChanged: () => void) {
+  if (!lastData) return;
+  const { query, res, local } = lastData;
 
   const localHits: LocalHit[] = local.hits ?? [];
   const localErrors: string[] = (local.errors ?? []).filter(Boolean);
 
-  // Native hits become real cards in the same grid — same look, same behavior.
-  const localCards: AppSummary[] = localHits.map((hit) => ({
-    id: `native:${hit.backend}:${hit.name}`,
-    name: hit.name,
-    summary: hit.summary || `${backendName(hit.backend)} package`,
-    icon: hit.icon ?? "",
-    categories: [],
-    verified: false,
-    source: hit.backend,
-    sources: [hit.backend],
-    nativePackage: hit.name,
-    installed: hit.installed,
-    featured: false,
-  }));
+  const flatCards: AppSummary[] = (res?.hits ?? []).filter((hit) => sourceFilter === "all" || sourceFilter === "flatpak");
+  const localCards: AppSummary[] = localHits
+    .filter((hit) => matchesSourceFilter(sourceFilter, [hit.backend]))
+    .map((hit) => ({
+      id: `native:${hit.backend}:${hit.name}`,
+      name: hit.name,
+      summary: hit.summary || `${backendName(hit.backend)} package`,
+      icon: hit.icon ?? "",
+      categories: [],
+      verified: false,
+      source: hit.backend,
+      sources: [hit.backend],
+      nativePackage: hit.name,
+      installed: hit.installed,
+      featured: false,
+    }));
+
+  const filteredTotal = flatCards.length + localCards.length;
+  const sourceWord =
+    sourceFilter === "all" ? "apps" :
+    sourceFilter === "flatpak" ? "Flatpak apps" :
+    sourceFilter === "snap" ? "Snap apps" : "native apps";
 
   const header = `
     <div class="view-head">
@@ -41,15 +59,16 @@ export async function renderSearch(root: HTMLElement, navigate: Navigate, onChan
         <h1 class="view-title">Results for “${esc(query)}”</h1>
         <p class="view-sub">${res
           ? `${res.total.toLocaleString()} ${res.total === 1 ? "app" : "apps"} ${res.fromFlathub ? "on Flathub" : "in the built-in catalog"}`
-          : "Flathub unreachable"}${localCards.length ? ` · ${localCards.length} from your repos` : ""}</p>
+          : "Flathub unreachable"}${localHits.length ? ` · ${localHits.length} from your repos` : ""} · showing ${filteredTotal} ${esc(sourceWord)}</p>
       </div>
+      ${sourceSegmented("search-source-filter", sourceFilter)}
     </div>`;
 
-  const flathubBody = res && res.hits.length > 0
-    ? `<div class="app-grid">${res.hits.map(appCard).join("")}</div>`
+  const flathubBody = flatCards.length
+    ? `<div class="app-grid">${flatCards.map(appCard).join("")}</div>`
     : "";
   const localBody = localCards.length
-    ? `<h2 class="section-label"><span>From your package manager (${esc(backendName(localCards[0]!.source))})</span></h2>
+    ? `<h2 class="section-label"><span>From your package manager${localCards[0] ? ` (${esc(backendName(localCards[0]!.source))})` : ""}</span></h2>
        <div class="app-grid">${localCards.map(appCard).join("")}</div>`
     : "";
   const localErrorsBody = localErrors.length
@@ -57,19 +76,23 @@ export async function renderSearch(root: HTMLElement, navigate: Navigate, onChan
     : "";
 
   const offline = res !== null && res.fromFlathub === false;
-  const nothingFound = res !== null && res.hits.length === 0 && localCards.length === 0;
-  const unavailable = res === null && localCards.length === 0;
+  const nothingFound = filteredTotal === 0;
+  const unavailable = res === null && filteredTotal === 0 && sourceFilter === "all";
 
   const body = unavailable
     ? emptyState("wifiOff", "Search unavailable", isMyGo
         ? "Check your network connection and try again."
         : "Run inside U Store to see live search.")
     : nothingFound
-      ? emptyState("search", "No apps found", `We couldn't find anything for “${query}”. Try a shorter or different spelling.`)
+      ? emptyState("search", sourceFilter === "all" ? "No apps found" : "Nothing with that source", `We couldn't find ${esc(sourceWord)} for “${esc(query)}”. Try another source or a shorter spelling.`)
       : `${flathubBody}${localBody}`;
 
   root.innerHTML = `<div class="view">${offline && !localBody ? notice("Flathub unavailable — showing built-in catalog matches only.", "info") : ""}${header}${localErrorsBody}${body}</div>`;
 
-  const grid = root.querySelectorAll<HTMLElement>(".app-grid");
-  grid.forEach((g) => wireCardActions(g, navigate, onChanged));
+  wireSourceFilter(root, "search-source-filter", (f) => {
+    sourceFilter = f;
+    paint(root, navigate, onChanged);
+  });
+  const grids = root.querySelectorAll<HTMLElement>(".app-grid");
+  grids.forEach((g) => wireCardActions(g, navigate, onChanged));
 }

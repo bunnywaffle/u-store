@@ -97,3 +97,39 @@ export function installIconFallback() {
     true
   );
 }
+
+/* ============ Source filter (Flatpak / native / snap) ============ */
+
+export type SourceFilter = "all" | "flatpak" | "native" | "snap";
+export const SOURCE_FILTERS: { id: SourceFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "flatpak", label: "Flatpak" },
+  { id: "native", label: "Native" },
+  { id: "snap", label: "Snap" },
+];
+
+const NATIVE_BACKENDS = new Set(["apt", "dnf", "pacman", "zypper", "apk"]);
+
+export function matchesSourceFilter(filter: SourceFilter, backends: readonly string[]): boolean {
+  if (filter === "all") return true;
+  if (filter === "flatpak") return backends.includes("flatpak");
+  if (filter === "snap") return backends.includes("snap");
+  return backends.some((b) => NATIVE_BACKENDS.has(b));
+}
+
+/** Segmented control for the All/Flatpak/Native/Snap source filter. */
+export function sourceSegmented(id: string, current: SourceFilter): string {
+  return `<div class="segmented" id="${id}" role="radiogroup" aria-label="Filter by source">${SOURCE_FILTERS.map(
+    (f) => `<button role="radio" data-source="${f.id}" aria-checked="${f.id === current}" class="${f.id === current ? "is-active" : ""}">${f.label}</button>`
+  ).join("")}</div>`;
+}
+
+/** Wire a segmented source filter: clicking a segment calls onChange with it. */
+export function wireSourceFilter(root: HTMLElement, id: string, onChange: (f: SourceFilter) => void) {
+  root.querySelector(`#${id}`)?.addEventListener("click", (event) => {
+    const btn = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-source]");
+    if (!btn) return;
+    const next = btn.dataset.source as SourceFilter;
+    onChange(next);
+  });
+}

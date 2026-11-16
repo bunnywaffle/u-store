@@ -1,40 +1,67 @@
 import { Store, backendName, type InstalledApp } from "../api";
-import { appIcon, emptyState, esc, verifiedBadge, toast } from "../components";
+import { appIcon, emptyState, esc, verifiedBadge, toast, matchesSourceFilter, sourceSegmented, wireSourceFilter, type SourceFilter } from "../components";
 import { icon } from "../icons";
 import { runRemove } from "../actions";
 
 type Navigate = (route: string, param?: string) => void;
 
+let sourceFilter: SourceFilter = "all";
+let lastApps: InstalledApp[] = [];
+
 export async function renderInstalled(root: HTMLElement, navigate: Navigate, onChanged: () => void) {
   root.innerHTML = `<div class="view"><div class="view-head"><div><h1 class="view-title">Installed</h1><p class="view-sub">Everything this machine has, from every source.</p></div></div><div class="skeleton" style="height:70px;border-radius:var(--radius-lg)"></div></div>`;
 
-  let apps: InstalledApp[] = [];
   try {
-    apps = await Store.installed();
+    lastApps = await Store.installed();
   } catch {
     root.innerHTML = `<div class="view">${emptyState("wifiOff", "Couldn't read installed apps", "The backend didn't answer. Is the system package database healthy?")}</div>`;
     return;
   }
 
+  paint(root, navigate, onChanged);
+}
+
+function paint(root: HTMLElement, navigate: Navigate, onChanged: () => void) {
+  const apps = lastApps;
   if (apps.length === 0) {
     root.innerHTML = `<div class="view"><div class="view-head"><div><h1 class="view-title">Installed</h1><p class="view-sub">Everything this machine has, from every source.</p></div></div>${emptyState("package", "Nothing installed yet", "Apps you install from here will show up in this list, whichever source they came from.")}</div>`;
     return;
   }
 
+  const filtered = apps.filter((a) => matchesSourceFilter(sourceFilter, a.sources.map((s) => s.backend)));
   const flatpakCount = apps.filter((a) => a.sources.some((s) => s.backend === "flatpak")).length;
+  const sourceWord =
+    sourceFilter === "all" ? "apps" :
+    sourceFilter === "flatpak" ? "Flatpak apps" :
+    sourceFilter === "snap" ? "Snap apps" : "native apps";
 
   root.innerHTML = `
   <div class="view">
     <div class="view-head">
       <div>
         <h1 class="view-title">Installed</h1>
-        <p class="view-sub">${apps.length} ${apps.length === 1 ? "app" : "apps"}${flatpakCount ? ` · ${flatpakCount} via Flatpak` : ""}</p>
+        <p class="view-sub">${apps.length} ${apps.length === 1 ? "app" : "apps"}${flatpakCount ? ` · ${flatpakCount} via Flatpak` : ""} · showing ${filtered.length} ${esc(sourceWord)}</p>
       </div>
+      ${sourceSegmented("installed-source-filter", sourceFilter)}
     </div>
-    <div class="list" id="installed-list">${apps.map(row).join("")}</div>
+    ${filtered.length === 0
+      ? emptyState("package", "Nothing with that source", `No installed apps match this filter yet. Install something from the Discover page instead.`)
+      : `<div class="list" id="installed-list">${filtered.map(row).join("")}</div>`}
   </div>`;
 
-  const list = root.querySelector<HTMLElement>("#installed-list")!;
+  const list = root.querySelector<HTMLElement>("#installed-list");
+
+  wireSourceFilter(root, "installed-source-filter", (f) => {
+    sourceFilter = f;
+    paint(root, navigate, onChanged);
+  });
+
+  if (!list) return;
+  // Re-wire delegation after each repaint.
+  wireInstalledList(list, root, navigate, onChanged);
+}
+
+function wireInstalledList(list: HTMLElement, root: HTMLElement, navigate: Navigate, onChanged: () => void) {
   list.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
     const target = event.target as HTMLElement;
